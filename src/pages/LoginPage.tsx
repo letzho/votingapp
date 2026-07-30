@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseConfigError } from '../lib/supabase'
 import { getClientIp, getDeviceFingerprint, isValidNypEmail } from '../lib/fingerprint'
 import { saveSession } from '../lib/session'
 
@@ -22,6 +22,11 @@ export function LoginPage() {
 
     setLoading(true)
     try {
+      if (supabaseConfigError) {
+        setError(supabaseConfigError)
+        return
+      }
+
       const ip = await getClientIp()
       const fingerprint = getDeviceFingerprint()
 
@@ -31,7 +36,10 @@ export function LoginPage() {
         p_ip_address: ip,
       })
 
-      if (rpcError) throw rpcError
+      if (rpcError) {
+        setError(rpcError.message || 'Sign in failed. Check Supabase settings on Vercel.')
+        return
+      }
 
       const result = data as {
         success: boolean
@@ -58,7 +66,13 @@ export function LoginPage() {
       sessionStorage.removeItem('returnAfterLogin')
       navigate(returnTo || '/')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign in failed. Check your connection.')
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err !== null && 'message' in err
+            ? String((err as { message: unknown }).message)
+            : 'Sign in failed. Check your connection.'
+      setError(message.includes('Failed to fetch') ? 'Cannot reach Supabase. Check VITE_SUPABASE_URL on Vercel and redeploy.' : message)
     } finally {
       setLoading(false)
     }
