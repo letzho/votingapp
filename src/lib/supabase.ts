@@ -1,19 +1,29 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim()
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
+function sanitizeEnv(value: string | undefined): string {
+  if (!value) return ''
+  return value.trim().replace(/^['"]|['"]$/g, '').replace(/[\r\n]/g, '')
+}
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+const supabaseUrl = sanitizeEnv(import.meta.env.VITE_SUPABASE_URL)
+const supabaseAnonKey = sanitizeEnv(import.meta.env.VITE_SUPABASE_ANON_KEY)
+
+export const isSupabaseConfigured = Boolean(
+  supabaseUrl.startsWith('https://') && supabaseAnonKey.length > 20
+)
 
 if (!isSupabaseConfigured) {
-  console.error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY')
+  console.error('Invalid or missing Supabase env vars:', {
+    url: supabaseUrl || '(empty)',
+    keyPrefix: supabaseAnonKey ? `${supabaseAnonKey.slice(0, 12)}...` : '(empty)',
+  })
 }
 
 export const supabaseConfigError = isSupabaseConfigured
   ? null
-  : 'Supabase is not configured. In Vercel, add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY under Settings → Environment Variables, then redeploy.'
+  : 'Supabase is not configured. In Vercel, set VITE_SUPABASE_URL (https://xxx.supabase.co) and VITE_SUPABASE_ANON_KEY (anon/publishable key), then redeploy.'
 
-export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '')
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export interface VoterSession {
   voterId: string
