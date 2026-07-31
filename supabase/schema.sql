@@ -20,6 +20,12 @@ CREATE TABLE IF NOT EXISTS voters (
   last_login_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Whitelist for student emails (@mymail.nyp.edu.sg only)
+CREATE TABLE IF NOT EXISTS allowed_student_emails (
+  email TEXT PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Individual votes (max 3 per voter, max 3 per device fingerprint)
 CREATE TABLE IF NOT EXISTS votes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -81,6 +87,16 @@ BEGIN
       'success', false,
       'error', 'Email must end with @mymail.nyp.edu.sg or @nyp.edu.sg'
     );
+  END IF;
+
+  -- Student emails must be on the approved list
+  IF v_email LIKE '%@mymail.nyp.edu.sg' THEN
+    IF NOT EXISTS (SELECT 1 FROM allowed_student_emails WHERE email = v_email) THEN
+      RETURN json_build_object(
+        'success', false,
+        'error', 'This student email is not registered for voting. Please contact the event organiser.'
+      );
+    END IF;
   END IF;
 
   IF p_device_fingerprint IS NULL OR length(trim(p_device_fingerprint)) < 8 THEN
@@ -233,6 +249,7 @@ ON CONFLICT (slug) DO NOTHING;
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE voters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE allowed_student_emails ENABLE ROW LEVEL SECURITY;
 
 -- Public read for groups and leaderboard
 CREATE POLICY "Anyone can read groups"
@@ -246,6 +263,10 @@ CREATE POLICY "Anyone can read vote totals via view"
 -- Voters: no direct client access (use RPC functions)
 CREATE POLICY "No direct voter access"
   ON voters FOR ALL
+  USING (false);
+
+CREATE POLICY "No direct allowed email access"
+  ON allowed_student_emails FOR ALL
   USING (false);
 
 -- Votes: insert only via RPC (no direct insert policy for anon)

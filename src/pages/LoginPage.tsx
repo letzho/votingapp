@@ -99,7 +99,9 @@ export function LoginPage() {
     <div className="card auth-card">
       <h2>Sign in to Vote</h2>
       <p className="muted">
-        Use your NYP email to vote. Each voter gets up to <strong>3 votes</strong> total.
+        Student emails (<strong>@mymail.nyp.edu.sg</strong>) must be on the approved list.
+        Staff emails (<strong>@nyp.edu.sg</strong>) can sign in directly. Each person gets up to{' '}
+        <strong>3 votes</strong>.
       </p>
 
       <form onSubmit={handleSubmit} className="auth-form">
