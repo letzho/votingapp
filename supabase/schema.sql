@@ -74,6 +74,7 @@ DECLARE
   v_email TEXT := lower(trim(p_email));
   v_voter voters%ROWTYPE;
   v_device_vote_count INTEGER;
+  v_vote_count INTEGER;
 BEGIN
   IF NOT is_valid_nyp_email(v_email) THEN
     RETURN json_build_object(
@@ -115,12 +116,19 @@ BEGIN
     RETURNING * INTO v_voter;
   END IF;
 
+  SELECT COUNT(*)::INTEGER INTO v_vote_count FROM votes WHERE voter_id = v_voter.id;
+
   RETURN json_build_object(
     'success', true,
     'voter_id', v_voter.id,
     'email', v_voter.email,
-    'votes_used', (SELECT COUNT(*)::INTEGER FROM votes WHERE voter_id = v_voter.id),
-    'votes_remaining', GREATEST(0, 3 - (SELECT COUNT(*)::INTEGER FROM votes WHERE voter_id = v_voter.id))
+    'votes_used', v_vote_count,
+    'votes_remaining', GREATEST(0, 3 - v_vote_count),
+    'votes_complete', v_vote_count >= 3,
+    'message', CASE
+      WHEN v_vote_count >= 3 THEN 'You have already completed all 3 votes with this email account.'
+      ELSE NULL
+    END
   );
 END;
 $$;
@@ -160,7 +168,10 @@ BEGIN
 
   SELECT COUNT(*)::INTEGER INTO v_vote_count FROM votes WHERE voter_id = p_voter_id;
   IF v_vote_count >= 3 THEN
-    RETURN json_build_object('success', false, 'error', 'You have used all 3 votes.');
+    RETURN json_build_object(
+      'success', false,
+      'error', 'You have already completed all 3 votes with this email account. You cannot vote again, even on a different device.'
+    );
   END IF;
 
   SELECT COUNT(*)::INTEGER INTO v_device_vote_count

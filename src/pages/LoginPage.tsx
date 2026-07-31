@@ -55,6 +55,8 @@ export function LoginPage() {
         email?: string
         votes_used?: number
         votes_remaining?: number
+        votes_complete?: boolean
+        message?: string
       }
 
       if (!result.success) {
@@ -68,6 +70,14 @@ export function LoginPage() {
         votesUsed: result.votes_used ?? 0,
         votesRemaining: result.votes_remaining ?? 3,
       })
+
+      if ((result.votes_remaining ?? 0) <= 0 || result.votes_complete) {
+        sessionStorage.setItem(
+          'votesCompleteAlert',
+          result.message ??
+            'You have already completed all 3 votes with this email account. You cannot vote again, even on a different device.'
+        )
+      }
 
       sessionStorage.removeItem('returnAfterLogin')
       navigate('/vote')

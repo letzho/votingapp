@@ -23,6 +23,7 @@ export function VotePage() {
   const [success, setSuccess] = useState('')
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState('')
+  const [votesCompleteAlert, setVotesCompleteAlert] = useState('')
 
   useEffect(() => {
     if (searchParams.get('group')) {
@@ -38,6 +39,13 @@ export function VotePage() {
     }
     setSession(s)
     setScannedTeam(loadScannedGroup())
+
+    const storedAlert = sessionStorage.getItem('votesCompleteAlert')
+    if (storedAlert) {
+      setVotesCompleteAlert(storedAlert)
+      sessionStorage.removeItem('votesCompleteAlert')
+    }
+
     refreshStatus(s.voterId)
   }, [navigate])
 
@@ -61,6 +69,11 @@ export function VotePage() {
         }
         setSession(updated)
         updateSessionVotes(updated.votesUsed, updated.votesRemaining)
+        if (updated.votesRemaining <= 0) {
+          setVotesCompleteAlert(
+            'You have already completed all 3 votes with this email account. You cannot vote again, even on a different device.'
+          )
+        }
       }
     } finally {
       setLoading(false)
@@ -70,7 +83,9 @@ export function VotePage() {
   const handleSubmit = async () => {
     if (!session || !scannedTeam) return
     if (session.votesRemaining <= 0) {
-      setError('You have used all 3 votes.')
+      setError(
+        'You have already completed all 3 votes with this email account. You cannot vote again, even on a different device.'
+      )
       return
     }
 
@@ -181,6 +196,11 @@ export function VotePage() {
 
   return (
     <Layout>
+      {votesCompleteAlert && (
+        <div className="votes-complete-banner" role="alert">
+          {votesCompleteAlert}
+        </div>
+      )}
       <div className="vote-grid">
         <div className="card session-card">
           <h2>Your Voting Session</h2>
@@ -224,7 +244,9 @@ export function VotePage() {
               </button>
 
               {(session?.votesRemaining ?? 0) <= 0 && (
-                <p className="muted center-text">You have used all your votes. Thank you for participating!</p>
+                <p className="error-msg center-text">
+                  You have already finished voting with this email account (3/3 votes used).
+                </p>
               )}
             </>
           ) : (
@@ -250,7 +272,9 @@ export function VotePage() {
               </button>
 
               {(session?.votesRemaining ?? 0) <= 0 && (
-                <p className="muted center-text">You have used all your votes. Thank you for participating!</p>
+                <p className="error-msg center-text">
+                  You have already finished voting with this email account (3/3 votes used).
+                </p>
               )}
 
               {(session?.votesRemaining ?? 0) > 0 && (
