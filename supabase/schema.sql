@@ -36,20 +36,18 @@ CREATE INDEX IF NOT EXISTS idx_votes_group_id ON votes(group_id);
 CREATE INDEX IF NOT EXISTS idx_votes_device_fingerprint ON votes(device_fingerprint);
 CREATE INDEX IF NOT EXISTS idx_voters_device_fingerprint ON voters(device_fingerprint);
 
--- Aggregate view for leaderboard (top 20 teams)
+-- Aggregate view for leaderboard (ranked by vote count)
 CREATE OR REPLACE VIEW group_vote_totals AS
 SELECT
   g.id,
   g.name,
   g.slug,
   g.booth_number,
-  COUNT(v.id)::INTEGER AS vote_count,
-  COALESCE(SUM(v.stars), 0)::INTEGER AS total_stars,
-  COALESCE(ROUND(AVG(v.stars)::NUMERIC, 2), 0) AS average_stars
+  COUNT(v.id)::INTEGER AS vote_count
 FROM groups g
 LEFT JOIN votes v ON v.group_id = g.id
 GROUP BY g.id, g.name, g.slug, g.booth_number
-ORDER BY total_stars DESC, average_stars DESC, vote_count DESC;
+ORDER BY vote_count DESC, g.name ASC;
 
 -- Validate NYP email domain
 CREATE OR REPLACE FUNCTION is_valid_nyp_email(email TEXT)
@@ -160,10 +158,6 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'Group not found. Please scan a valid booth QR code.');
   END IF;
 
-  IF p_stars < 1 OR p_stars > 5 THEN
-    RETURN json_build_object('success', false, 'error', 'Rating must be between 1 and 5 stars.');
-  END IF;
-
   SELECT COUNT(*)::INTEGER INTO v_vote_count FROM votes WHERE voter_id = p_voter_id;
   IF v_vote_count >= 3 THEN
     RETURN json_build_object('success', false, 'error', 'You have used all 3 votes.');
@@ -176,14 +170,13 @@ BEGIN
   END IF;
 
   INSERT INTO votes (voter_id, group_id, stars, ip_address, device_fingerprint)
-  VALUES (p_voter_id, v_group.id, p_stars, COALESCE(p_ip_address, 'unknown'), p_device_fingerprint);
+  VALUES (p_voter_id, v_group.id, 1, COALESCE(p_ip_address, 'unknown'), p_device_fingerprint);
 
   v_vote_count := v_vote_count + 1;
 
   RETURN json_build_object(
     'success', true,
     'group_name', v_group.name,
-    'stars', p_stars,
     'votes_used', v_vote_count,
     'votes_remaining', GREATEST(0, 3 - v_vote_count)
   );

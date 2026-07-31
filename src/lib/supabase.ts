@@ -38,8 +38,6 @@ export interface GroupTotal {
   slug: string
   booth_number: string | null
   vote_count: number
-  total_stars: number
-  average_stars: number
 }
 
 export interface Group {

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { QrScanner } from '../components/QrScanner'
-import { StarRating } from '../components/StarRating'
 import { getCameraBlockedMessage, isCameraAllowed } from '../lib/cameraAccess'
 import { resolveGroupFromQr } from '../lib/resolveGroupFromQr'
 import { clearScannedGroup, loadScannedGroup, saveScannedGroup, type ScannedGroup } from '../lib/scannedGroup'
@@ -17,7 +16,6 @@ export function VotePage() {
 
   const [session, setSession] = useState<VoterSession | null>(null)
   const [scannedTeam, setScannedTeam] = useState<ScannedGroup | null>(null)
-  const [stars, setStars] = useState(0)
   const [loading, setLoading] = useState(true)
   const [resolving, setResolving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -26,7 +24,6 @@ export function VotePage() {
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState('')
 
-  // Block manual URL entry like /vote?group=team-alpha — voting is scan-only
   useEffect(() => {
     if (searchParams.get('group')) {
       navigate('/vote', { replace: true })
@@ -72,10 +69,6 @@ export function VotePage() {
 
   const handleSubmit = async () => {
     if (!session || !scannedTeam) return
-    if (stars < 1) {
-      setError('Please select a star rating.')
-      return
-    }
     if (session.votesRemaining <= 0) {
       setError('You have used all 3 votes.')
       return
@@ -92,7 +85,7 @@ export function VotePage() {
       const { data, error: rpcError } = await supabase.rpc('submit_vote', {
         p_voter_id: session.voterId,
         p_group_slug: scannedTeam.slug,
-        p_stars: stars,
+        p_stars: 1,
         p_ip_address: ip,
         p_device_fingerprint: fingerprint,
       })
@@ -103,7 +96,6 @@ export function VotePage() {
         success: boolean
         error?: string
         group_name?: string
-        stars?: number
         votes_used?: number
         votes_remaining?: number
       }
@@ -121,10 +113,9 @@ export function VotePage() {
       setSession(updated)
       updateSessionVotes(updated.votesUsed, updated.votesRemaining)
       setSuccess(
-        `Thank you! You rated ${result.group_name} ${result.stars} star${result.stars! > 1 ? 's' : ''}. ` +
+        `Thank you! Your vote for ${result.group_name} was recorded. ` +
           `${updated.votesRemaining} vote${updated.votesRemaining !== 1 ? 's' : ''} remaining.`
       )
-      setStars(0)
       clearScannedGroup()
       setScannedTeam(null)
     } catch (err) {
@@ -156,14 +147,12 @@ export function VotePage() {
 
       saveScannedGroup(team)
       setScannedTeam({ ...team, scannedAt: new Date().toISOString() })
-      setStars(0)
     } finally {
       setResolving(false)
     }
   }, [])
 
   const handleScanAnother = () => {
-    setStars(0)
     setError('')
     setSuccess('')
     setScanError('')
@@ -245,10 +234,8 @@ export function VotePage() {
               <div className="team-detected">
                 <p className="team-detected-label">Scanned team</p>
                 <p className="team-detected-name">{scannedTeam.name}</p>
-                <p className="muted">Please confirm this is the booth you are at, then rate the project.</p>
+                <p className="muted">Please confirm this is the booth you are at, then submit your vote.</p>
               </div>
-
-              <StarRating value={stars} onChange={setStars} disabled={submitting || (session?.votesRemaining ?? 0) <= 0} />
 
               {error && <p className="error-msg">{error}</p>}
               {success && <p className="success-msg">{success}</p>}
@@ -257,7 +244,7 @@ export function VotePage() {
                 type="button"
                 className="btn btn-primary btn-wide"
                 onClick={handleSubmit}
-                disabled={submitting || stars < 1 || (session?.votesRemaining ?? 0) <= 0}
+                disabled={submitting || (session?.votesRemaining ?? 0) <= 0}
               >
                 {submitting ? 'Submitting…' : 'Submit Vote'}
               </button>

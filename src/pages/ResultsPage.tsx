@@ -13,9 +13,8 @@ export function ResultsPage() {
     const { data, error: fetchError } = await supabase
       .from('group_vote_totals')
       .select('*')
-      .order('total_stars', { ascending: false })
-      .order('average_stars', { ascending: false })
       .order('vote_count', { ascending: false })
+      .order('name', { ascending: true })
       .limit(20)
 
     if (fetchError) {
@@ -46,7 +45,7 @@ export function ResultsPage() {
         <div className="results-header">
           <div>
             <h2>Top 20 Teams</h2>
-            <p className="muted">Ranked by total stars, then average rating</p>
+            <p className="muted">Ranked by number of votes</p>
           </div>
           <button type="button" className="btn btn-secondary" onClick={fetchResults} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
@@ -72,8 +71,6 @@ export function ResultsPage() {
                   <th>Team</th>
                   <th>Booth</th>
                   <th>Votes</th>
-                  <th>Total Stars</th>
-                  <th>Avg Rating</th>
                 </tr>
               </thead>
               <tbody>
@@ -83,8 +80,6 @@ export function ResultsPage() {
                     <td className="team-cell">{team.name}</td>
                     <td>{team.booth_number ?? '—'}</td>
                     <td>{team.vote_count}</td>
-                    <td className="stars-cell">{team.total_stars} ★</td>
-                    <td>{Number(team.average_stars).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
