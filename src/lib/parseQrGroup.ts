@@ -23,5 +23,10 @@ export function parseGroupSlugFromQr(text: string): string | null {
     return labelMatch[1].toLowerCase().trim()
   }
 
+  // Plain slug text in QR, e.g. "team-alpha"
+  if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(trimmed)) {
+    return trimmed.toLowerCase()
+  }
+
   return null
 }
