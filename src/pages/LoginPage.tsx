@@ -37,7 +37,14 @@ export function LoginPage() {
       })
 
       if (rpcError) {
-        setError(rpcError.message || 'Sign in failed. Check Supabase settings on Vercel.')
+        const isInvalidKey =
+          rpcError.code === '401' ||
+          rpcError.message?.toLowerCase().includes('invalid api key')
+        setError(
+          isInvalidKey
+            ? 'Invalid Supabase API key on Vercel. Use the anon/publishable key from the SAME project as VITE_SUPABASE_URL, then redeploy.'
+            : rpcError.message || 'Sign in failed. Check Supabase settings on Vercel.'
+        )
         return
       }
 
@@ -62,9 +69,8 @@ export function LoginPage() {
         votesRemaining: result.votes_remaining ?? 3,
       })
 
-      const returnTo = sessionStorage.getItem('returnAfterLogin')
       sessionStorage.removeItem('returnAfterLogin')
-      navigate(returnTo || '/')
+      navigate('/vote')
     } catch (err) {
       const message =
         err instanceof Error

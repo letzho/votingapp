@@ -10,12 +10,17 @@ export function parseGroupSlugFromQr(text: string): string | null {
     const group = url.searchParams.get('group')
     if (group) return group.toLowerCase().trim()
   } catch {
-    // fall through to regex
+    // fall through to other formats
   }
 
-  const match = trimmed.match(/[?&]group=([^&]+)/i)
-  if (match) {
-    return decodeURIComponent(match[1]).toLowerCase().trim()
+  const queryMatch = trimmed.match(/[?&]group=([^&\s]+)/i)
+  if (queryMatch) {
+    return decodeURIComponent(queryMatch[1]).toLowerCase().trim()
+  }
+
+  const labelMatch = trimmed.match(/^group:\s*(.+)$/i)
+  if (labelMatch) {
+    return labelMatch[1].toLowerCase().trim()
   }
 
   return null

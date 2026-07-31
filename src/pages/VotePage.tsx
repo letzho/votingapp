@@ -4,7 +4,8 @@ import { Layout } from '../components/Layout'
 import { QrScanner } from '../components/QrScanner'
 import { StarRating } from '../components/StarRating'
 import { getCameraBlockedMessage, isCameraAllowed } from '../lib/cameraAccess'
-import { parseGroupSlugFromQr } from '../lib/parseQrGroup'
+import { resolveGroupFromQr } from '../lib/resolveGroupFromQr'
+import { clearScannedGroup, loadScannedGroup, saveScannedGroup, type ScannedGroup } from '../lib/scannedGroup'
 import { supabase } from '../lib/supabase'
 import { getClientIp, getDeviceFingerprint } from '../lib/fingerprint'
 import { loadSession, clearSession, updateSessionVotes } from '../lib/session'
@@ -13,42 +14,35 @@ import type { VoterSession } from '../lib/supabase'
 export function VotePage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const groupSlug = searchParams.get('group')?.toLowerCase().trim() ?? ''
 
   const [session, setSession] = useState<VoterSession | null>(null)
-  const [groupName, setGroupName] = useState('')
+  const [scannedTeam, setScannedTeam] = useState<ScannedGroup | null>(null)
   const [stars, setStars] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [resolving, setResolving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState('')
 
+  // Block manual URL entry like /vote?group=team-alpha — voting is scan-only
+  useEffect(() => {
+    if (searchParams.get('group')) {
+      navigate('/vote', { replace: true })
+    }
+  }, [searchParams, navigate])
+
   useEffect(() => {
     const s = loadSession()
     if (!s) {
-      if (groupSlug) {
-        sessionStorage.setItem('returnAfterLogin', `/vote?group=${groupSlug}`)
-      }
       navigate('/login')
       return
     }
     setSession(s)
+    setScannedTeam(loadScannedGroup())
     refreshStatus(s.voterId)
-  }, [groupSlug, navigate])
-
-  useEffect(() => {
-    if (!groupSlug) return
-    supabase
-      .from('groups')
-      .select('name')
-      .eq('slug', groupSlug)
-      .single()
-      .then(({ data }) => {
-        if (data) setGroupName(data.name)
-      })
-  }, [groupSlug])
+  }, [navigate])
 
   const refreshStatus = async (voterId: string) => {
     setLoading(true)
@@ -77,7 +71,7 @@ export function VotePage() {
   }
 
   const handleSubmit = async () => {
-    if (!session || !groupSlug) return
+    if (!session || !scannedTeam) return
     if (stars < 1) {
       setError('Please select a star rating.')
       return
@@ -97,7 +91,7 @@ export function VotePage() {
 
       const { data, error: rpcError } = await supabase.rpc('submit_vote', {
         p_voter_id: session.voterId,
-        p_group_slug: groupSlug,
+        p_group_slug: scannedTeam.slug,
         p_stars: stars,
         p_ip_address: ip,
         p_device_fingerprint: fingerprint,
@@ -131,6 +125,8 @@ export function VotePage() {
           `${updated.votesRemaining} vote${updated.votesRemaining !== 1 ? 's' : ''} remaining.`
       )
       setStars(0)
+      clearScannedGroup()
+      setScannedTeam(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit vote.')
     } finally {
@@ -140,42 +136,48 @@ export function VotePage() {
 
   const handleSignOut = () => {
     clearSession()
+    clearScannedGroup()
     navigate('/login')
   }
 
-  const handleQrScan = useCallback(
-    async (text: string) => {
-      setScanning(false)
-      setScanError('')
+  const handleQrScan = useCallback(async (text: string) => {
+    setScanning(false)
+    setScanError('')
+    setError('')
+    setSuccess('')
+    setResolving(true)
 
-      const slug = parseGroupSlugFromQr(text)
-      if (!slug) {
-        setScanError('Invalid QR code. Scan a booth QR that links to a team.')
+    try {
+      const team = await resolveGroupFromQr(text)
+      if (!team) {
+        setScanError('Team not found. Scan an official booth QR code with a valid team slug.')
         return
       }
 
-      const { data, error: fetchError } = await supabase
-        .from('groups')
-        .select('name')
-        .eq('slug', slug)
-        .single()
-
-      if (fetchError || !data) {
-        setScanError('Team not found. Please scan a valid booth QR code.')
-        return
-      }
-
-      navigate(`/vote?group=${slug}`)
-    },
-    [navigate]
-  )
+      saveScannedGroup(team)
+      setScannedTeam({ ...team, scannedAt: new Date().toISOString() })
+      setStars(0)
+    } finally {
+      setResolving(false)
+    }
+  }, [])
 
   const handleScanAnother = () => {
     setStars(0)
     setError('')
     setSuccess('')
     setScanError('')
-    navigate('/vote')
+    clearScannedGroup()
+    setScannedTeam(null)
+  }
+
+  const openScanner = () => {
+    setScanError('')
+    if (!isCameraAllowed()) {
+      setScanError(getCameraBlockedMessage())
+      return
+    }
+    setScanning(true)
   }
 
   if (loading && !session) {
@@ -209,11 +211,16 @@ export function VotePage() {
         </div>
 
         <div className="card vote-card">
-          {!groupSlug ? (
+          {resolving ? (
+            <>
+              <h2>Reading QR Code…</h2>
+              <p className="muted center-text">Looking up the team in the event database.</p>
+            </>
+          ) : !scannedTeam ? (
             <>
               <h2>Scan a Booth QR Code</h2>
               <p className="muted">
-                Visit a student project booth, open the camera here, and scan the QR code on their display.
+                You must scan the official QR code at a booth to vote. Teams are matched by QR slug only.
               </p>
 
               {scanError && <p className="error-msg">{scanError}</p>}
@@ -221,14 +228,7 @@ export function VotePage() {
               <button
                 type="button"
                 className="btn btn-primary btn-wide"
-                onClick={() => {
-                  setScanError('')
-                  if (!isCameraAllowed()) {
-                    setScanError(getCameraBlockedMessage())
-                    return
-                  }
-                  setScanning(true)
-                }}
+                onClick={openScanner}
                 disabled={(session?.votesRemaining ?? 0) <= 0}
               >
                 Open Camera &amp; Scan QR
@@ -240,9 +240,13 @@ export function VotePage() {
             </>
           ) : (
             <>
-              <h2>Rate This Project</h2>
-              <p className="group-name">{groupName || groupSlug}</p>
-              <p className="muted">How would you rate this student project?</p>
+              <h2>Confirm Your Vote</h2>
+
+              <div className="team-detected">
+                <p className="team-detected-label">Scanned team</p>
+                <p className="team-detected-name">{scannedTeam.name}</p>
+                <p className="muted">Please confirm this is the booth you are at, then rate the project.</p>
+              </div>
 
               <StarRating value={stars} onChange={setStars} disabled={submitting || (session?.votesRemaining ?? 0) <= 0} />
 
@@ -264,7 +268,7 @@ export function VotePage() {
 
               {(session?.votesRemaining ?? 0) > 0 && (
                 <button type="button" className="btn btn-secondary btn-wide" onClick={handleScanAnother}>
-                  Scan another booth
+                  Scan a different booth
                 </button>
               )}
             </>

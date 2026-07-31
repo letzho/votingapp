@@ -321,6 +321,29 @@ a:hover {
   margin: 0.5rem 0;
 }
 
+.team-detected {
+  margin: 1rem 0 1.25rem;
+  padding: 1rem 1.1rem;
+  border-radius: 10px;
+  background: rgba(245, 197, 24, 0.1);
+  border: 1px solid rgba(245, 197, 24, 0.35);
+}
+
+.team-detected-label {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.team-detected-name {
+  margin: 0.35rem 0 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
 .star-rating {
   display: flex;
   gap: 0.35rem;

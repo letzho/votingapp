@@ -27,7 +27,14 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
     scanner
       .start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: QR_BOX_SIZE, height: QR_BOX_SIZE } },
+        {
+          fps: 12,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const size = Math.min(viewfinderWidth, viewfinderHeight) * 0.72
+            return { width: Math.floor(size), height: Math.floor(size) }
+          },
+          aspectRatio: 1,
+        },
         (decodedText) => {
           if (scannedRef.current) return
           scannedRef.current = true
@@ -61,7 +68,7 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
             Close
           </button>
         </div>
-        <p className="muted">Align the QR code inside the frame below.</p>
+        <p className="muted">Hold steady and align the booth QR code inside the frame.</p>
         <div className="qr-scanner-viewport" style={viewportStyle}>
           <div id={elementId} className="qr-scanner-region" />
           {!error && (
